@@ -263,6 +263,12 @@ table.league.small{min-width:0}
 .offer img{width:52px;height:60px;object-fit:contain}
 .offer .up,.offer .down{font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px}
 .offer .up{background:var(--good);color:var(--ink)}.offer .down{background:rgba(255,255,255,.12)}
+.offer.retire{border-style:dashed}
+.offer .rt-ic{width:52px;text-align:center;font-size:28px;color:var(--muted)}
+.slab.fate{border-color:var(--yellow)}
+.slab.fate.ended,.endcard{border-color:var(--red)}
+.kpis b.txt{font-size:18px;line-height:1.25;padding:3px 0 4px}
+.endh{font-size:clamp(26px,4vw,38px)}
 .slab.rating{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center}
 .bigrate{font-family:var(--display);font-weight:800;font-size:clamp(34px,7vh,52px);line-height:1;color:var(--c);font-variant-numeric:tabular-nums;min-width:0;text-align:center;padding:4px 12px;border:2px solid var(--c)}
 .headline{font-family:var(--display);font-weight:700;font-size:clamp(20px,3vw,28px);line-height:1.15;margin:4px 0 6px;text-wrap:balance}
@@ -1861,7 +1867,7 @@ $('#bPause').addEventListener('click',()=>pause(true));
 $('#bCam').addEventListener('click',()=>{if(G)nextCam()});
 $('#bSnd').addEventListener('click',e=>{Snd.init();e.currentTarget.setAttribute('aria-pressed',String(Snd.toggle()))});
 function toMenu(){Tour=null;$('#hud').hidden=true;startAttract();show('#scrMain');updateCareerMd()}
-function updateCareerMd(){const el=$('#careerMd');if(el&&CR&&CR.name)el.textContent='Verder met '+CR.name+', seizoen '+CR.season+' bij '+tierClubs(CR.tier)[CR.club].name+'.'}
+function updateCareerMd(){const el=$('#careerMd');if(el&&CR&&CR.name)el.textContent=CR.phase==='retired'?'De loopbaan van '+CR.name+' is voorbij. Bekijk ze of begin opnieuw.':'Verder met '+CR.name+' ('+CR.age+'), seizoen '+CR.season+' bij '+tierClubs(CR.tier)[CR.club].name+'.'}
 
 /* break / full time */
 function showBreak(next){
@@ -1961,7 +1967,7 @@ function tierClubs(tier){
  }
  return tierCache[tier]=out;
 }
-let CR=store('vb_career');
+let CR=store('vb_career');setTimeout(()=>crInit(),0);
 function crSave(){store('vb_career',CR)}
 function crOvr(a=CR.attrs,r=CR.pos){return Math.round(r==='DEF'?a.def*.45+a.spd*.2+a.pas*.2+a.drb*.15:r==='MID'?a.pas*.4+a.drb*.2+a.def*.15+a.sht*.15+a.spd*.1:a.sht*.42+a.spd*.25+a.drb*.25+a.pas*.08)}
 function crValue(){const v=Math.pow(10,(crOvr()-40)/12)*1000*(CR.age<=21?1.6:CR.age<=25?1.25:CR.age<=29?1:.6);return v}
@@ -1975,7 +1981,7 @@ function newCareer(o){
  const parts=o.name.trim().split(/\s+/);const short=parts.length>1?parts[0][0]+'. '+parts.slice(1).join(' '):parts[0];
  CR={v:1,name:o.name.trim(),short,pos:o.pos,num:o.num,skin:o.skin,hair:o.hair,age:17,pot:Math.round(rnd(82,94)),attrs,tier:0,club:Math.floor(Math.random()*8),season:1,round:0,
   fixtures:roundRobin(shuffle([...Array(8).keys()])),table:newTable(),contract:{years:1,wage:TIERS[0].wage},form:[],seasonStats:{apps:0,starts:0,goals:0,assists:0,ratings:[],mins:0},
-  totals:{apps:0,goals:0,assists:0},history:[],news:[],injury:0,trophies:[],training:{focus:o.pos==='DEF'?'def':o.pos==='MID'?'pas':'sht',int:'normaal'},morale:70,phase:'season',offers:null};
+  totals:{apps:0,goals:0,assists:0},history:[],news:[],injury:0,trophies:[],training:{focus:o.pos==='DEF'?'def':o.pos==='MID'?'pas':'sht',int:'normaal'},morale:70,phase:'season',offers:null,majorInj:0,injuries:[],peakTier:0};crInit();
  CR.news.unshift({tag:TIERS[0].paper,text:CR.name+' (17) tekent zijn eerste contract bij '+myClub().name+'.'});
  crSave();
 }
@@ -2018,15 +2024,100 @@ function careerSubIn(){
 }
 function careerInjured(){
  const t=myTeamG(),me=G.me;if(!t||!me)return;
- const bi=t.bench.findIndex(b=>b.role===me.role);G.rt.offMin=curMinute();G.rt.injury=1+Math.floor(Math.random()*3);
+ const bi=t.bench.findIndex(b=>b.role===me.role);G.rt.offMin=curMinute();
+ if(Math.random()<.14){const sv=pick(SEVERE);G.rt.severe=sv;G.rt.injury=rngW(sv.w);G.rt.injName=sv.n}else{const m=pick(MINOR);G.rt.injury=rngW(m.w);G.rt.injName=m.n}
  if(bi>=0)substitute(t,me,bi);else{me.sentOff=true;me.mesh.root.visible=false}
  const h=t.human;h.locked=null;h.player=null;h.benched=true;G.me=null;G.ff=true;
- banner('Geblesseerd','Je moet naar de kant. Nog '+G.rt.injury+(G.rt.injury>1?' weken':' week')+' out.','warn',2.6);
+ banner(G.rt.severe?'Zware blessure':'Geblesseerd',G.rt.injName+'. Je moet naar de kant.','warn',2.8);
+}
+
+/* ---------- Fate: ageing, injuries, illness, retirement ---------- */
+const SEVERE=[
+ {n:'Gescheurde voorste kruisband',w:[7,12],loss:{spd:4,drb:2,sta:2},end:'Je knie wordt na de kruisbandoperatie nooit meer stabiel genoeg voor topvoetbal.'},
+ {n:'Dubbele beenbreuk',w:[6,10],loss:{spd:3,sta:2},end:'Het been groeit scheef aan. Na twee extra operaties is er geen weg terug.'},
+ {n:'Afgescheurde achillespees',w:[7,11],loss:{spd:5,sta:3},end:'Je achillespees scheurt bij de revalidatie opnieuw. Je lichaam laat het niet meer toe.'},
+ {n:'Gebroken enkel met bandletsel',w:[4,8],loss:{spd:2,drb:2},end:'Er blijft artrose in je enkel. Elke sprint doet pijn, en de dokters raden je aan te stoppen.'},
+ {n:'Zware hernia',w:[4,7],loss:{sta:3,spd:1},end:'De rugzenuw blijft geknepen. Na de tweede operatie kan je niet meer op topniveau trainen.'},
+];
+const MINOR=[{n:'Hamstringblessure',w:[1,3]},{n:'Verstuikte enkel',w:[1,2]},{n:'Liesblessure',w:[1,3]},{n:'Kneuzing aan de knie',w:[1,2]},{n:'Kuitverrekking',w:[1,2]}];
+const ABSURD_MINOR=[
+ {n:'Gebroken teen',t:'laat thuis een fles aftershave op zijn voet vallen',y:'Je laat thuis een fles aftershave op je voet vallen'},
+ {n:'Gekneusde ribben',t:'struikelt op de trap over zijn eigen hond',y:'Je struikelt op de trap over je eigen hond'},
+ {n:'Brandwonde aan de voet',t:'valt in slaap met een warme kruik tegen zijn voet',y:'Je valt in slaap met een warme kruik tegen je voet'},
+ {n:'Opgezwollen oog',t:'wordt op training door een wesp in het ooglid gestoken',y:'Een wesp steekt je op training in je ooglid'},
+ {n:'Rugblessure',t:'zit een hele nacht te gamen in een slechte stoel',y:'Je zit een hele nacht te gamen in een slechte stoel'},
+ {n:'Verrekte nekspier',t:'juicht iets te enthousiast bij een goal van een ploegmaat',y:'Je juicht iets te enthousiast bij een goal van een ploegmaat'},
+ {n:'Snijwonde aan de hand',t:'snijdt zich bij het openen van een avocado',y:'Je snijdt je bij het openen van een avocado'},
+ {n:'Geïnfecteerde beet',t:'wordt gebeten door de kat van zijn vriendin',y:'De kat van je vriendin bijt je in je hand'},
+ {n:'Verstuikte pols',t:'glijdt uit over een bananenschil in de kleedkamer',y:'Je glijdt uit over een bananenschil in de kleedkamer'},
+];
+const ILLNESS=[
+ 'Bij een routinematige medische test ontdekken de artsen een hartritmestoornis. Ze verbieden je nog op topniveau te spelen.',
+ 'Een virale infectie tast je hartspier aan. De cardioloog is duidelijk: stoppen met topsport.',
+ 'Na een hersenschudding blijven de klachten maandenlang aanhouden. De neurologen raden je dringend aan te stoppen.',
+ 'Een chronische darmziekte maakt het onmogelijk om nog op topniveau te trainen en te herstellen.',
+];
+const ABSURD_END=[
+ 'Bij het ophangen van de kerstverlichting val je van de ladder. Je enkel wordt nooit meer de oude.',
+ 'Tijdens een sponsorevent rijdt een golfkarretje over je voet. Na drie operaties geven de artsen het op.',
+ 'Een jetski-uitstap op vakantie eindigt tegen een boei. Je knie is niet meer te redden.',
+ 'Je glijdt uit over een natte vloer in een hotellobby en scheurt alles wat er in een knie te scheuren valt.',
+ 'Bij een fotoshoot voor een sponsor val je van een podium. Je heup herstelt niet meer volledig.',
+];
+function crInit(){if(!CR)return;CR.majorInj=CR.majorInj||0;CR.injuries=CR.injuries||[];CR.injuryName=CR.injuryName||'Blessure';CR.peak=CR.peak||crOvr();CR.peakTier=CR.peakTier==null?CR.tier:CR.peakTier}
+function rngW(w){return w[0]+Math.floor(Math.random()*(w[1]-w[0]+1))}
+function injWeeks(n){return n+(n>1?' weken':' week')}
+function logInjury(name,weeks){CR.injuries.push({season:CR.season,age:CR.age,name,weeks})}
+function applyLoss(loss){for(const k in loss)CR.attrs[k]=Math.max(30,CR.attrs[k]-loss[k]*rnd(.7,1.3));CR.pot=Math.max(crOvr()+2,CR.pot-rnd(1,3))}
+function retire(reason,kind){
+ const s=CR.seasonStats;
+ if(CR.phase==='season'&&s.apps>0)CR.history.push({season:CR.season,age:CR.age,club:myClub().name,tier:CR.tier,apps:s.apps,goals:s.goals,assists:s.assists,avg:Math.round(avgOf(s.ratings)*10)/10,pos:0});
+ CR.phase='retired';CR.offers=null;CR.retired={reason,kind,age:CR.age,season:CR.season,club:myClub().name,tier:CR.tier};
+ CR.news.unshift({tag:TIERS[CR.tier].paper,text:kind==='choice'?CR.name+' ('+CR.age+') zet een punt achter zijn loopbaan.':kind==='age'?'Einde van een tijdperk: '+CR.name+' stopt op '+CR.age+'-jarige leeftijd.':'Schok in het voetbal: '+CR.name+' moet op '+CR.age+'-jarige leeftijd stoppen.'});
+ return {ended:true,text:reason,kind};
+}
+function severeInjury(sv,weeks,how){
+ CR.injury=weeks;CR.injuryName=sv.n;logInjury(sv.n,weeks);CR.majorInj++;
+ const endP=.06+.12*(CR.majorInj-1)+(CR.age>=30?.12:0)+(CR.age>=33?.2:0);
+ if(Math.random()<endP)return retire(sv.end,'injury');
+ applyLoss(sv.loss);
+ CR.news.unshift({tag:'Medisch',text:CR.short+' '+how+': '+sv.n.toLowerCase()+'. Hij is '+injWeeks(weeks)+' out.'});
+ return {severe:true,text:sv.n+'. Je bent '+injWeeks(weeks)+' out en verliest wat snelheid en conditie.'};
+}
+/* rolled once per matchday */
+function fateRoll(r){
+ const age=CR.age;
+ if(Math.random()<.0002*(age>=32?2:1))return retire(pick(ILLNESS),'illness');
+ if(Math.random()<.00017)return retire(pick(ABSURD_END),'absurd');
+ if(CR.injury>0)return null;
+ const load=(CR.training.int==='zwaar'?1.35:CR.training.int==='licht'?.8:1)*(1+Math.max(0,age-28)*.12);
+ if(r.played&&Math.random()<.0038*load){const sv=pick(SEVERE);return severeInjury(sv,rngW(sv.w),'loopt een zware blessure op');}
+ if(Math.random()<.005){const a=pick(ABSURD_MINOR),w=rngW([1,3]);CR.injury=w;CR.injuryName=a.n;logInjury(a.n,w);
+  CR.news.unshift({tag:'Opmerkelijk',text:CR.short+' '+a.t+'. '+a.n+', '+injWeeks(w)+' out.'});return {absurd:true,text:a.y+'. '+a.n+', '+injWeeks(w)+' out.'}}
+ return null;
+}
+/* once per season change */
+function ageYear(){
+ const a=CR.age,out=[];
+ const rate={spd:.75,sta:.6,drb:.4,def:.3,sht:.25,pas:.15};
+ if(a>=30)for(const k in rate){const d=rate[k]*(a-29)*rnd(.6,1.3);if(d>.05){CR.attrs[k]=Math.max(30,CR.attrs[k]-d);out.push([k,d])}}
+ if(a>=27)CR.pot=Math.max(crOvr(),CR.pot-(a>=30?2:1));
+ return out;
+}
+function ageNote(){const a=CR.age;return a<=20?'Je bent jong: je groeit snel.':a<=25?'Je zit in je groeiende jaren.':a<=29?'Je zit op je hoogtepunt. Geniet ervan.':a<=32?'Je lichaam gaat achteruit: elk seizoen verlies je wat snelheid en conditie.':'Je bent een veteraan. Elk seizoen gaat het harder bergaf.'}
+function legacyLine(){
+ const t=CR.totals,pk=CR.peakTier,ch=CR.trophies.filter(x=>x.startsWith('Kampioen')).length;
+ if(pk>=4&&t.goals>=60)return 'Een legende van het Europese voetbal.';
+ if(pk>=4)return 'Je speelde op het hoogste niveau. Daar kunnen er maar weinig van dromen.';
+ if(pk>=3&&ch)return 'Een gevestigde waarde in de Pro League, met prijzen op je palmares.';
+ if(pk>=3)return 'Je haalde de Pro League. Een mooie profcarrière.';
+ if(pk>=2)return 'Een trouwe kracht in de Eerste Nationale.';
+ return 'Een cultheld in de lagere reeksen. In het clubcafé praten ze nog over je.';
 }
 /* weekly growth */
 function grow(k,amt,gains){
  const room=CR.pot-CR.attrs[k];let a=amt*(room>0?clamp(room/22,.12,1.25):.05);
- a*=CR.age<=20?1.25:CR.age<=24?1:CR.age<=28?.6:.25;
+ a*=CR.age<=20?1.25:CR.age<=24?1:CR.age<=27?.6:CR.age<=30?.25:.06;
  const before=Math.round(CR.attrs[k]);CR.attrs[k]=Math.min(99,CR.attrs[k]+a);const after=Math.round(CR.attrs[k]);
  gains[k]=(gains[k]||0)+a;return after>before;
 }
@@ -2037,13 +2128,12 @@ function weekGrowth(r){
  if(r&&r.played){const q=clamp((r.rating-5.8)*.35,0,1.2)*Math.min(1,r.mins/60);
   const rel=CR.pos==='FWD'?['sht','drb','spd']:CR.pos==='MID'?['pas','drb','sta']:['def','spd','pas'];
   rel.forEach(k=>grow(k,q*.5,gains));if(r.goals)grow('sht',.25*r.goals,gains);}
- if(CR.age>=31)for(const [k] of ATTR)if(k==='spd'||k==='sta')CR.attrs[k]=Math.max(35,CR.attrs[k]-.25);
  let injured=0;if(CR.training.int==='zwaar'&&Math.random()<.06)injured=1+Math.floor(Math.random()*2);
  return {gains,injured};
 }
 function headline(r,opp,gf,ga){
  const n=CR.short,o=opp.name,res=gf>ga?'de zege':gf<ga?'de nederlaag':'het gelijkspel';
- if(!r.played)return r.injuredOut?n+' mist de match tegen '+o+' door een blessure.':n+' blijft de hele match op de bank tegen '+o+'.';
+ if(!r.played)return r.injuredOut?n+' mist de match tegen '+o+' ('+CR.injuryName.toLowerCase()+').':n+' blijft de hele match op de bank tegen '+o+'.';
  if(r.goals>=3)return 'Hattrick! '+n+' is de held tegen '+o+'.';
  if(r.goals===2)return n+' scoort twee keer in '+res+' tegen '+o+'.';
  if(r.goals===1&&gf>ga&&gf-ga<=1)return 'Doelpunt van '+n+' beslist de match tegen '+o+'.';
@@ -2065,13 +2155,16 @@ function processResult(r){
   CR.morale=clamp(CR.morale+(r.rating-6.5)*6+(r.gf>r.ga?3:r.gf<r.ga?-3:0),20,100)}
  else CR.morale=clamp(CR.morale-(r.injuredOut?0:5),20,100);
  const wg=weekGrowth(r);
- if(r.injury)CR.injury=r.injury;else if(CR.injury>0)CR.injury--;
- if(!r.injury&&wg.injured&&!CR.injury){CR.injury=wg.injured;CR.news.unshift({tag:'Medisch',text:CR.short+' raakt geblesseerd op training: '+wg.injured+(wg.injured>1?' weken':' week')+' out.'})}
- const hl=headline(r,opp,r.gf,r.ga);CR.news.unshift({tag:TIERS[CR.tier].paper,text:hl});CR.news=CR.news.slice(0,12);
- CR.round++;
- if(CR.round>=CR.fixtures.length)seasonEnd();
+ let fate=null;
+ if(r.injury){if(r.severe)fate=severeInjury(r.severe,r.injury,'valt geblesseerd uit tegen '+opp.name);else{CR.injury=r.injury;CR.injuryName=r.injName||'Blessure';logInjury(CR.injuryName,r.injury)}}
+ else if(CR.injury>0)CR.injury--;
+ if(!fate&&!r.injury&&wg.injured&&!CR.injury){const m=pick(MINOR);CR.injury=wg.injured;CR.injuryName=m.n;logInjury(m.n,wg.injured);CR.news.unshift({tag:'Medisch',text:CR.short+' houdt een '+m.n.toLowerCase()+' over aan een zware training: '+injWeeks(wg.injured)+' out.'})}
+ if(!fate&&!r.injury)fate=fateRoll(r);
+ const hl=headline(r,opp,r.gf,r.ga);if(!(fate&&fate.ended))CR.news.splice(fate?1:0,0,{tag:TIERS[CR.tier].paper,text:hl});CR.news=CR.news.slice(0,12);
+ CR.peak=Math.max(CR.peak||0,crOvr());
+ if(CR.phase!=='retired'){CR.round++;if(CR.round>=CR.fixtures.length)seasonEnd()}
  crSave();
- return {gains:wg.gains,hl,opp};
+ return {gains:wg.gains,hl,opp,fate};
 }
 function simCareerMatch(){
  const m=crFixture(),home=m.h===CR.club,clubs=tierClubs(CR.tier),me=clubs[CR.club],opp=clubs[home?m.a:m.h];
@@ -2088,7 +2181,11 @@ function seasonEnd(){
  if(pos===1){CR.trophies.push('Kampioen '+TIERS[CR.tier].name+' (seizoen '+CR.season+')');CR.news.unshift({tag:TIERS[CR.tier].paper,text:myClub().name+' is kampioen! '+CR.short+' viert mee.'})}
  if(avg>=7.6&&s.apps>=4)CR.trophies.push('Speler van het seizoen, '+TIERS[CR.tier].name+' (seizoen '+CR.season+')');
  CR.history.push({season:CR.season,age:CR.age,club:myClub().name,tier:CR.tier,apps:s.apps,goals:s.goals,assists:s.assists,avg:Math.round(avg*10)/10,pos});
+ CR.peakTier=Math.max(CR.peakTier||0,CR.tier);
  CR.phase='offers';CR.offers=makeOffers(avg,s.apps,pos);
+ const nextAge=CR.age+1;
+ if(nextAge>=41||!CR.offers.length){retire(nextAge>=41?'Op je '+CR.age+'ste hangt je lichaam de schoenen aan de haak. Geen enkele club wil nog een contract aanbieden.':'Geen enkele club biedt je nog een contract aan. Op je '+CR.age+'ste zit je loopbaan erop.','age');return}
+ if(CR.age>=32||CR.majorInj>=2&&CR.age>=28)CR.offers.push({retire:true});
 }
 function makeOffers(avg,apps,pos){
  const ov=crOvr(),offers=[];let jump=avg>=7.5&&apps>=4?2:avg>=6.85&&apps>=3?1:avg>=6.1?0:-1;if(pos===1&&jump<1&&avg>=6.5)jump=1;
@@ -2100,18 +2197,29 @@ function makeOffers(avg,apps,pos){
  if(jump>=1)addFrom(CR.tier+1,2);
  if(jump<=0)addFrom(CR.tier+jump,jump<0?2:1);
  if(jump===1&&Math.random()<.5)addFrom(CR.tier,1);
- const stay=CR.contract.years>1?{stay:true,tier:CR.tier,club:CR.club,years:CR.contract.years-1,wage:CR.contract.wage,role:'Huidig contract loopt door'}:(avg>=6.0||apps<3)?{stay:true,renew:true,tier:CR.tier,club:CR.club,years:2,wage:Math.round(CR.contract.wage*(avg>=7?1.3:1.08)/10)*10,role:'Contractverlenging'}:null;
+ let stay=CR.contract.years>1?{stay:true,tier:CR.tier,club:CR.club,years:CR.contract.years-1,wage:CR.contract.wage,role:'Huidig contract loopt door'}:(avg>=6.0||apps<3)?{stay:true,renew:true,tier:CR.tier,club:CR.club,years:2,wage:Math.round(CR.contract.wage*(avg>=7?1.3:1.08)/10)*10,role:'Contractverlenging'}:null;
+ if(stay&&stay.renew&&(CR.age>=37||CR.age>=33&&avg<6.4))stay=null;
  if(stay)offers.unshift(stay);
- if(!offers.length)addFrom(Math.max(0,CR.tier-1),1);
- return offers;
+ if(!offers.length&&CR.age<34)addFrom(Math.max(0,CR.tier-1),1);
+ let out=offers;
+ if(CR.age>=33)out=out.filter(o=>o.stay&&!o.renew||Math.random()>(CR.age-32)*.16);
+ if(CR.injury>=4&&CR.age>=30)out=out.filter(o=>o.stay&&!o.renew||Math.random()>.45);
+ for(const o of out)if(!o.stay&&CR.age>=31)o.years=1;
+ if(!out.length&&CR.age<35)addFrom(Math.max(0,CR.tier-1),1),out=offers.slice(-1);
+ return out;
 }
 function acceptOffer(i){
- const o=CR.offers[i];const moved=!o.stay;
+ const o=CR.offers[i];if(o.retire){retire('Na '+CR.season+' seizoenen beslis je zelf dat het mooi geweest is. Je neemt afscheid op je '+CR.age+'ste.','choice');crSave();renderCareer();return}
+ const moved=!o.stay;
  if(moved)CR.news.unshift({tag:TIERS[o.tier].paper,text:'Transfer: '+CR.name+' trekt van '+myClub().name+' naar '+tierClubs(o.tier)[o.club].name+'.'});
  else if(o.renew)CR.news.unshift({tag:TIERS[CR.tier].paper,text:CR.short+' verlengt bij '+myClub().name+'.'});
  CR.tier=o.tier;CR.club=o.club;CR.contract={years:o.years,wage:o.wage};
  CR.age++;CR.season++;CR.round=0;CR.fixtures=roundRobin(shuffle([...Array(8).keys()]));CR.table=newTable();
  CR.seasonStats={apps:0,starts:0,goals:0,assists:0,ratings:[],mins:0};CR.phase='season';CR.offers=null;if(moved){CR.form=[];CR.morale=Math.max(CR.morale,65)}
+ if(CR.injury>0)CR.injury=Math.max(0,CR.injury-3);
+ const dec=ageYear();
+ if(dec.length){const big=dec.sort((a,b)=>b[1]-a[1])[0];CR.news.unshift({tag:'Medisch',text:'Tijdens de voorbereiding merkt '+CR.short+' ('+CR.age+') dat hij trager wordt. '+ATTR.find(x=>x[0]===big[0])[1]+' -'+big[1].toFixed(1).replace('.',',')+'.'})}
+ if(Math.random()<(CR.age>=31?.003:.001)){retire(pick(ILLNESS),'illness')}
  crSave();startAttract(CR.tier);renderCareer();
 }
 /* ---------- Career screens ---------- */
@@ -2136,22 +2244,29 @@ function renderCareer(){
  let h='<div class="row" style="justify-content:space-between;align-items:flex-end"><div><div class="eyebrow">Carrière · seizoen '+CR.season+' · '+esc(T.name)+'</div><h2>'+esc(CR.name)+'</h2><div class="ctrl-hint">'+CR.age+' jaar · '+POS_NL[CR.pos]+' · #'+CR.num+' · algemeen '+ov+'</div></div><button class="btn ghost" id="crMenu">Hoofdmenu</button></div>';
  h+='<div class="cgrid">';
  /* next match / offers */
- if(CR.phase==='offers'){
+ if(CR.phase==='retired'){
+  const R=CR.retired,t=CR.totals,best=CR.history.slice().sort((a,b)=>b.avg-a.avg)[0],yrs=CR.history.length;
+  const kindL={choice:'Afscheid',age:'Pensioen',injury:'Blessure',illness:'Ziekte',absurd:'Noodlot'}[R.kind]||'Einde';
+  h+='<div class="slab ccard wide endcard"><div class="eyebrow">'+kindL+' · '+R.age+' jaar · '+esc(R.club)+'</div><h3 class="endh">Einde van je loopbaan</h3><p class="headline" style="margin:4px 0 10px">'+esc(R.reason)+'</p><p class="ctrl-hint" style="margin:0 0 12px">'+esc(legacyLine())+'</p>'+
+   '<div class="kpis wide">'+[['Seizoenen',yrs],['Wedstrijden',t.apps],['Goals',t.goals],['Assists',t.assists],['Hoogste niveau',TIERS[CR.peakTier||0].name],['Top algemeen',CR.peak||crOvr()],['Prijzen',CR.trophies.length],['Blessures',CR.injuries.length]].map(([l,v])=>'<div><b'+(typeof v==='string'?' class="txt"':'')+'>'+esc(String(v))+'</b><span>'+l+'</span></div>').join('')+'</div>'+
+   (best?'<p class="ctrl-hint" style="margin:12px 0 0">Beste seizoen: seizoen '+best.season+' ('+best.age+' jaar) bij '+esc(best.club)+', '+best.goals+' goals, gemiddeld '+String(best.avg).replace('.',',')+'.</p>':'')+
+   '<div class="row" style="margin-top:14px"><button class="btn" id="crNewYes">Begin een nieuwe carrière</button></div></div>';
+ }else if(CR.phase==='offers'){
   const pos=crTableSorted().findIndex(([i])=>i===CR.club)+1;
   h+='<div class="slab ccard wide"><h3>Einde seizoen '+CR.season+'</h3><p class="ctrl-hint" style="margin:6px 0 12px">'+esc(club.name)+' eindigt '+pos+'e. Jij: '+s.apps+' wedstrijden, '+s.goals+' goals, '+s.assists+' assists, gemiddeld '+(s.ratings.length?avg.toFixed(2).replace('.',','):'–')+'. Kies waar je volgend seizoen speelt.</p><div class="offers">'+
-   CR.offers.map((o,i)=>{const c=tierClubs(o.tier)[o.club];return '<button class="offer" data-offer="'+i+'"><img alt="" src="'+crest(c)+'"><span><b>'+esc(o.stay?(o.renew?'Verlengen bij ':'Blijven bij ')+c.name:c.name)+'</b><br><span class="ctrl-hint">'+esc(TIERS[o.tier].name)+' · '+esc(o.role)+'</span><br><span class="ctrl-hint">'+o.years+(o.years>1?' seizoenen':' seizoen')+' · '+euro(o.wage)+' per week</span></span>'+(o.tier>CR.tier?'<span class="up">Hoger niveau</span>':o.tier<CR.tier?'<span class="down">Lager niveau</span>':'')+'</button>'}).join('')+'</div></div>';
+   CR.offers.map((o,i)=>{if(o.retire)return '<button class="offer retire" data-offer="'+i+'"><span class="rt-ic" aria-hidden="true">⏻</span><span><b>Stoppen met voetbal</b><br><span class="ctrl-hint">Je bent '+CR.age+'. Neem afscheid en bekijk je loopbaan.</span></span><span></span></button>';const c=tierClubs(o.tier)[o.club];return '<button class="offer" data-offer="'+i+'"><img alt="" src="'+crest(c)+'"><span><b>'+esc(o.stay?(o.renew?'Verlengen bij ':'Blijven bij ')+c.name:c.name)+'</b><br><span class="ctrl-hint">'+esc(TIERS[o.tier].name)+' · '+esc(o.role)+'</span><br><span class="ctrl-hint">'+o.years+(o.years>1?' seizoenen':' seizoen')+' · '+euro(o.wage)+' per week</span></span>'+(o.tier>CR.tier?'<span class="up">Hoger niveau</span>':o.tier<CR.tier?'<span class="down">Lager niveau</span>':'')+'</button>'}).join('')+'</div></div>';
  }else{
   const m=crFixture(),home=m.h===CR.club,opp=tierClubs(CR.tier)[home?m.a:m.h],cs=crStarts();
-  const status=CR.injury>0?'<span class="pill red">Geblesseerd · nog '+CR.injury+(CR.injury>1?' weken':' week')+'</span>':cs.start?'<span class="pill good">Basisspeler</span>':'<span class="pill warn">Bank · invalbeurt rond de 60ste minuut</span>';
+  const status=CR.injury>0?'<span class="pill red">'+esc(CR.injuryName||'Geblesseerd')+' · nog '+injWeeks(CR.injury)+'</span>':cs.start?'<span class="pill good">Basisspeler</span>':'<span class="pill warn">Bank · invalbeurt rond de 60ste minuut</span>';
   h+='<div class="slab ccard wide"><div class="row" style="justify-content:space-between"><h3>Speeldag '+(CR.round+1)+' van 7</h3>'+status+'</div><div class="vs"><span>'+esc(home?club.name:opp.name)+'</span><b>tegen</b><span>'+esc(home?opp.name:club.name)+'</span></div><p class="ctrl-hint" style="margin:0 0 12px">'+(home?'Thuiswedstrijd':'Uitwedstrijd')+' voor '+esc(T.crowd)+'. '+(cs.start||CR.injury?'':'De trainer kiest nog voor een ploegmaat met '+cs.weakest+' algemeen. Bewijs je bij je invalbeurt.')+'</p><div class="row">'+
    (CR.injury>0?'<button class="btn" id="crSim">Volgende speeldag</button>':'<button class="btn" id="crPlay">Speel de wedstrijd</button><button class="btn ghost" id="crSim">Simuleer</button>')+'</div></div>';
  }
  /* club card */
- h+='<div class="slab ccard"><div class="clubrow"><img alt="" src="'+crest(club)+'"><div><div class="pk-name">'+esc(club.name)+'</div><div class="pk-meta">'+esc(T.name)+' · opgericht '+esc(club.est)+'</div><div class="pk-meta">Contract: nog '+CR.contract.years+(CR.contract.years>1?' seizoenen':' seizoen')+' · '+euro(CR.contract.wage)+' per week</div><div class="pk-meta">Marktwaarde: '+euro(crValue())+'</div></div></div></div>';
+ h+='<div class="slab ccard"><div class="clubrow"><img alt="" src="'+crest(club)+'"><div><div class="pk-name">'+esc(club.name)+'</div><div class="pk-meta">'+esc(T.name)+' · opgericht '+esc(club.est)+'</div>'+(CR.phase==='retired'?'<div class="pk-meta">Laatste club</div>':'<div class="pk-meta">Contract: nog '+CR.contract.years+(CR.contract.years>1?' seizoenen':' seizoen')+' · '+euro(CR.contract.wage)+' per week</div><div class="pk-meta">Marktwaarde: '+euro(crValue())+'</div>')+'</div></div></div>';
  /* training */
- h+='<div class="slab ccard"><h3>Training deze week</h3><div class="field" style="margin-top:10px"><span>Focus</span><div class="seg wrap">'+ATTR.map(([k,l])=>'<button data-tr="focus" data-v="'+k+'" aria-pressed="'+(CR.training.focus===k)+'">'+l+'</button>').join('')+'</div></div><div class="field" style="margin-top:10px"><span>Intensiteit</span><div class="seg">'+[['licht','Licht'],['normaal','Normaal'],['zwaar','Zwaar']].map(([k,l])=>'<button data-tr="int" data-v="'+k+'" aria-pressed="'+(CR.training.int===k)+'">'+l+'</button>').join('')+'</div></div><p class="ctrl-hint" style="margin:8px 0 0">Zwaar trainen geeft meer vooruitgang maar ook kans op een blessure. Hoe dichter bij je plafond, hoe trager je groeit.</p></div>';
+ if(CR.phase!=='retired')h+='<div class="slab ccard"><h3>Training deze week</h3><div class="field" style="margin-top:10px"><span>Focus</span><div class="seg wrap">'+ATTR.map(([k,l])=>'<button data-tr="focus" data-v="'+k+'" aria-pressed="'+(CR.training.focus===k)+'">'+l+'</button>').join('')+'</div></div><div class="field" style="margin-top:10px"><span>Intensiteit</span><div class="seg">'+[['licht','Licht'],['normaal','Normaal'],['zwaar','Zwaar']].map(([k,l])=>'<button data-tr="int" data-v="'+k+'" aria-pressed="'+(CR.training.int===k)+'">'+l+'</button>').join('')+'</div></div><p class="ctrl-hint" style="margin:8px 0 0">Zwaar trainen geeft meer vooruitgang maar ook kans op een blessure. Hoe dichter bij je plafond, hoe trager je groeit.</p></div>';
  /* attributes */
- h+='<div class="slab ccard"><h3>Vaardigheden</h3><div class="bars big" style="margin-top:10px">'+ATTR.map(([k,l])=>{const v=Math.round(CR.attrs[k]);return '<div class="bar"><span>'+l+'</span><i><b style="width:'+v+'%"></b></i><span>'+v+'</span></div>'}).join('')+'</div><p class="ctrl-hint" style="margin:8px 0 0">Talent volgens de scouts: '+'★'.repeat(clamp(Math.round((CR.pot-70)/5),1,5))+'☆'.repeat(5-clamp(Math.round((CR.pot-70)/5),1,5))+'</p></div>';
+ h+='<div class="slab ccard"><h3>Vaardigheden</h3><div class="bars big" style="margin-top:10px">'+ATTR.map(([k,l])=>{const v=Math.round(CR.attrs[k]);return '<div class="bar"><span>'+l+'</span><i><b style="width:'+v+'%"></b></i><span>'+v+'</span></div>'}).join('')+'</div><p class="ctrl-hint" style="margin:8px 0 0">'+esc(ageNote())+'</p><p class="ctrl-hint" style="margin:4px 0 0">Talent volgens de scouts: '+'★'.repeat(clamp(Math.round((CR.pot-70)/5),1,5))+'☆'.repeat(5-clamp(Math.round((CR.pot-70)/5),1,5))+'</p></div>';
  /* season */
  h+='<div class="slab ccard"><h3>Dit seizoen</h3><div class="kpis"><div><b>'+s.apps+'</b><span>Wedstr.</span></div><div><b>'+s.goals+'</b><span>Goals</span></div><div><b>'+s.assists+'</b><span>Assists</span></div><div><b>'+(s.ratings.length?avg.toFixed(1).replace('.',','):'–')+'</b><span>Gem. cijfer</span></div></div><div class="ctrl-hint" style="margin-top:10px">Vorm: '+(CR.form.length?CR.form.map(chip).join(' '):'nog geen wedstrijden')+'</div><div class="ctrl-hint" style="margin-top:6px">Moraal: '+(CR.morale>=75?'Uitstekend':CR.morale>=55?'Goed':CR.morale>=40?'Twijfelend':'Ontgoocheld')+'</div></div>';
  /* table */
@@ -2160,7 +2275,7 @@ function renderCareer(){
  /* news */
  h+='<div class="slab ccard"><h3>Nieuws</h3><ul class="news">'+CR.news.slice(0,6).map(n=>'<li><span>'+esc(n.tag)+'</span>'+esc(n.text)+'</li>').join('')+'</ul></div>';
  /* history */
- if(CR.history.length||CR.trophies.length)h+='<div class="slab ccard"><h3>Loopbaan</h3><ul class="news">'+CR.trophies.map(t=>'<li><span>Prijs</span>'+esc(t)+'</li>').join('')+CR.history.slice().reverse().map(x=>'<li><span>Seizoen '+x.season+'</span>'+esc(x.club)+' · '+x.apps+' wedstr. · '+x.goals+' goals · '+x.assists+' assists · gem. '+String(x.avg).replace('.',',')+'</li>').join('')+'</ul></div>';
+ if(CR.history.length||CR.trophies.length||CR.injuries.length)h+='<div class="slab ccard"><h3>Loopbaan</h3><ul class="news">'+CR.trophies.map(t=>'<li><span>Prijs</span>'+esc(t)+'</li>').join('')+CR.injuries.slice(-4).reverse().map(x=>'<li><span>Blessure · seizoen '+x.season+'</span>'+esc(x.name)+', '+injWeeks(x.weeks)+' out</li>').join('')+CR.history.slice().reverse().map(x=>'<li><span>Seizoen '+x.season+'</span>'+esc(x.club)+' · '+x.apps+' wedstr. · '+x.goals+' goals · '+x.assists+' assists · gem. '+String(x.avg).replace('.',',')+'</li>').join('')+'</ul></div>';
  h+='<div class="slab ccard"><h3>Voortgang</h3><p class="ctrl-hint" style="margin:4px 0 8px">Je carrière wordt automatisch op dit toestel bewaard. Met een back-upcode zet je ze over naar een ander toestel of een andere versie van het spel.</p><div class="row"><button class="btn ghost" id="bkCopy">Kopieer back-upcode</button><button class="btn ghost" id="bkLoadOpen">Back-up laden</button></div><textarea id="bkText" rows="3" hidden spellcheck="false" aria-label="Back-upcode"></textarea><div class="row" id="bkLoadRow" hidden><button class="btn" id="bkLoad">Laad deze code</button></div><p class="ctrl-hint" id="bkMsg" style="margin:0"></p></div>';
  h+='</div><div class="row" style="justify-content:flex-end">'+(crConfirmNew?'<span class="ctrl-hint">Je huidige carrière wordt gewist.</span><button class="btn ghost" id="crNewNo">Annuleren</button><button class="btn" id="crNewYes">Wissen en opnieuw beginnen</button>':'<button class="link" id="crNew">Nieuwe carrière beginnen</button>')+'</div>';
  $('#careerPanel').innerHTML=h;
@@ -2173,7 +2288,7 @@ function renderCareer(){
  q('#bkCopy').onclick=()=>{const code='VB1.'+btoa(unescape(encodeURIComponent(JSON.stringify(CR))));ta.hidden=false;ta.value=code;q('#bkLoadRow').hidden=true;
   try{navigator.clipboard.writeText(code).then(()=>{msg.textContent='Gekopieerd. Plak de code in een notitie om ze te bewaren.'},()=>{ta.select();msg.textContent='Selecteer en kopieer de code hierboven.'})}catch(e){ta.select();msg.textContent='Selecteer en kopieer de code hierboven.'}};
  q('#bkLoadOpen').onclick=()=>{ta.hidden=false;ta.value='';q('#bkLoadRow').hidden=false;msg.textContent='Plak je back-upcode en tik op Laad. Dit vervangt de carrière op dit toestel.';ta.focus()};
- q('#bkLoad').onclick=()=>{try{const v=ta.value.trim().replace(/^VB1\./,'');const d=JSON.parse(decodeURIComponent(escape(atob(v))));if(!d||!d.attrs||!d.fixtures)throw 0;CR=d;crSave();renderCareer();$('#careerPanel #bkMsg').textContent='Carrière geladen.'}catch(e){msg.textContent='Die code klopt niet. Kopieer ze opnieuw, volledig.'}};
+ q('#bkLoad').onclick=()=>{try{const v=ta.value.trim().replace(/^VB1\./,'');const d=JSON.parse(decodeURIComponent(escape(atob(v))));if(!d||!d.attrs||!d.fixtures)throw 0;CR=d;crInit();crSave();renderCareer();$('#careerPanel #bkMsg').textContent='Carrière geladen.'}catch(e){msg.textContent='Die code klopt niet. Kopieer ze opnieuw, volledig.'}};
  if(q('#crNewNo'))q('#crNewNo').onclick=()=>{crConfirmNew=false;renderCareer()};
  if(q('#crNewYes'))q('#crNewYes').onclick=()=>{crConfirmNew=false;CR=null;store('vb_career',null);renderNew();show('#scrNew')};
 }
@@ -2190,7 +2305,7 @@ function careerPostMatch(){
  const t=myTeamG(),o=other(t),gf=t.stats.goals,ga=o.stats.goals,rt=G.rt,played=rt.onMin!=null;
  const end=rt.offMin!=null?rt.offMin:(G.period>=3?120:90),mins=played?Math.max(1,end-rt.onMin):0;
  const rating=played?computeRating(rt,gf,ga,mins,CR.pos):null;
- const r={played,started:played&&rt.onMin<1,rating,mins,goals:rt.goals,assists:rt.assists,red:rt.red,gf,ga,injury:rt.injury||0};
+ const r={played,started:played&&rt.onMin<1,rating,mins,goals:rt.goals,assists:rt.assists,red:rt.red,gf,ga,injury:rt.injury||0,injName:rt.injName,severe:rt.severe};
  const out=processResult(r);
  const km=played?(rt.dist*(2700/G.periodLen)/1000):0;
  const gl=Object.entries(out.gains).filter(([k,v])=>v>=.05).sort((a,b)=>b[1]-a[1]).map(([k,v])=>'<li>'+ATTR.find(a=>a[0]===k)[1]+' <b>+'+v.toFixed(1).replace('.',',')+'</b></li>').join('');
@@ -2198,8 +2313,10 @@ function careerPostMatch(){
  let h='<div class="row" style="justify-content:space-between"><div><div class="eyebrow">Eindstand · speeldag '+CR.round+'</div><h2>'+esc(t.td.abbr)+' '+gf+' – '+ga+' '+esc(o.td.abbr)+'</h2></div></div>';
  h+='<div class="slab rating"><div class="bigrate" style="--c:'+(rating==null?'var(--muted)':rating>=7?'var(--good)':rating>=6?'var(--accent)':'var(--red)')+'">'+(rating==null?'–':rating.toFixed(1).replace('.',','))+'</div><div><div class="eyebrow">'+esc(TIERS[CR.tier].paper)+'</div><p class="headline">'+esc(out.hl)+'</p><p class="ctrl-hint" style="margin:0">'+esc(coachLine(r))+'</p></div></div>';
  if(played)h+='<div class="slab"><div class="kpis wide">'+stat('Minuten',Math.round(mins))+stat('Goals',rt.goals)+stat('Assists',rt.assists)+stat('Passes',rt.passOk+'/'+(rt.passOk+rt.passBad))+stat('Schoten',rt.onT+'/'+rt.shots)+stat('Duels gewonnen',rt.tackles)+stat('Onderscheppingen',rt.inter)+stat('Balverlies',rt.losses)+stat('Afstand',km.toFixed(1).replace('.',',')+' km')+'</div></div>';
- h+='<div class="slab"><h3>Vooruitgang deze week</h3><ul class="gains">'+(gl||'<li>Geen merkbare vooruitgang</li>')+'</ul>'+(CR.injury>0?'<p class="ctrl-hint" style="margin:8px 0 0">Geblesseerd: nog '+CR.injury+(CR.injury>1?' weken':' week')+'.</p>':'')+'</div>';
- h+='<div class="row" style="justify-content:flex-end"><button class="btn" id="pmNext">'+(CR.phase==='offers'?'Naar het einde van het seizoen':'Verder')+'</button></div>';
+ const f=out.fate;
+ if(f)h+='<div class="slab fate'+(f.ended?' ended':'')+'"><div class="eyebrow">'+(f.ended?'Einde loopbaan':f.severe?'Zware blessure':'Opmerkelijk')+'</div><p class="headline" style="margin:4px 0 0">'+esc(f.text)+'</p></div>';
+ if(!(f&&f.ended))h+='<div class="slab"><h3>Vooruitgang deze week</h3><ul class="gains">'+(gl||'<li>Geen merkbare vooruitgang</li>')+'</ul>'+(CR.injury>0?'<p class="ctrl-hint" style="margin:8px 0 0">'+esc(CR.injuryName)+': nog '+injWeeks(CR.injury)+' out.</p>':'')+'</div>';
+ h+='<div class="row" style="justify-content:flex-end"><button class="btn" id="pmNext">'+(CR.phase==='retired'?'Bekijk je loopbaan':CR.phase==='offers'?'Naar het einde van het seizoen':'Verder')+'</button></div>';
  $('#breakPanel').innerHTML=h;show('#scrBreak');Snd.crowdLevel(.06);
  $('#breakPanel #pmNext').onclick=toCareerHub;
 }
@@ -2232,7 +2349,7 @@ canvas.addEventListener('pointerdown',()=>{if(G&&G.phase==='replay'&&!G.attract)
  document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
 })();
 function touchLabels(){
- if($('#touch').hidden)return;const h=G.humans.find(h=>h.id==='p1');if(!h||!h.player)return;
+ if($('#touch').hidden)return;const h=G.humans.find(h=>h.id==='p1');if(!h)return;{const sb=$('#tbtns .b-sw'),sl=h.locked||h.benched?'Vraag bal':'Wissel';if(sb.textContent!==sl)sb.textContent=sl}if(!h.player)return;
  const t=h.team,opp=(ball.owner&&ball.owner.team!==t)||(ball.held&&ball.held.team!==t);
  const sp=G.phase==='setpiece'&&G.sp&&G.sp.taker===h.player?G.sp.type:null;
  const L=sp==='throwin'?{pass:'Gooi',shoot:'Gooi',lng:'Ver'}:sp==='penalty'?{pass:'Pass',shoot:'Schiet',lng:'Lang'}:opp?{pass:'Tackle',shoot:'Sliding',lng:'Lang'}:{pass:'Pass',shoot:'Schot',lng:'Lang'};
@@ -2244,7 +2361,7 @@ setTimeout(updateCareerMd,0);
 function startAttract(tier){if(tier!=null&&tier!==4){const cl=tierClubs(tier),a=Math.floor(Math.random()*8),b=(a+1+Math.floor(Math.random()*7))%8;setupMatch({home:cl[a],away:cl[b],homeForm:cl[a].form,awayForm:cl[b].form,homeCtrl:'cpu',awayCtrl:'cpu',diff:'normaal',halfMin:6,night:TIERS[tier].night,replays:false,attract:true,knockout:false,tier});return}const a=Math.floor(Math.random()*TEAMS.length);let b=(a+1+Math.floor(Math.random()*(TEAMS.length-1)))%TEAMS.length;setupMatch({home:a,away:b,homeForm:TEAMS[a].form,awayForm:TEAMS[b].form,homeCtrl:'cpu',awayCtrl:'cpu',diff:'normaal',halfMin:6,night:Setup.night,replays:false,attract:true,knockout:false})}
 startAttract();
 requestAnimationFrame(frame);
-window.__vbDebug={get CR(){return CR},simCareerMatch,acceptOffer,crOvr,tierClubs,startCareerMatch,get G(){return G},step,ball,TEAMS,setupMatch,startShootout,startPeriod,FIXED};
+window.__mkDebug=pos=>newCareer({name:'Sim Speler',num:9,pos,skin:SKINS[0],hair:HAIRS[0]});window.__vbDebug={get CR(){return CR},simCareerMatch,acceptOffer,crOvr,tierClubs,startCareerMatch,get G(){return G},step,ball,TEAMS,setupMatch,startShootout,startPeriod,FIXED};
 })();
 </script>
 
