@@ -2086,9 +2086,10 @@ function updateHUD(){
  const h1=G.humans.find(h=>h.charge);const pw=$('#power');
  if(h1&&h1.charge){pw.hidden=false;pw.querySelector('.pw-fill').style.width=Math.min(100,h1.charge.t/.85*100)+'%'}else pw.hidden=true;
  const act=$('#active');let html='';
- for(const h of G.humans){const p=h.player;if(h.benched){html+='<div class="plabel"><span class="tag" style="background:var(--p1)">JIJ</span><span class="nm">'+(G.rt&&G.rt.offMin!=null?'Aan de kant':'Bank · invalbeurt rond 60\'')+'</span></div>';continue}if(!p)continue;const lr=h.locked?liveRating():null;const ask=h.locked&&G.time-(G.askT||-9)<1.5;html+='<div class="plabel'+(ask?' ask':'')+'"><span class="tag" style="background:var(--'+h.id+')">'+(h.locked?'JIJ':h.id.toUpperCase())+'</span><span class="nm">'+p.d.num+' · '+esc(p.d.short)+(ask?' · Bal!':'')+'</span>'+(lr!=null?'<span class="rt">'+lr.toFixed(1).replace('.',',')+'</span>':'')+'<span class="st"><i style="width:'+Math.round(p.stamina)+'%"></i></span></div>'}
+ for(const h of G.humans){const p=h.player;if(h.benched){html+='<div class="plabel"><span class="tag" style="background:var(--p1)">●</span><span class="nm">'+(G.rt&&G.rt.offMin!=null?'Aan de kant':'Bank · invalbeurt rond 60\'')+'</span></div>';continue}if(!p)continue;const lr=h.locked?liveRating():null;const ask=h.locked&&G.time-(G.askT||-9)<1.5;html+='<div class="plabel'+(ask?' ask':'')+'"><span class="tag" style="background:var(--'+h.id+')">'+(h.locked?'●':h.id.toUpperCase())+'</span><span class="nm">'+p.d.num+' · '+esc(p.d.short)+(ask?' · Bal!':'')+'</span>'+(lr!=null?'<span class="rt">'+lr.toFixed(1).replace('.',',')+'</span>':'')+'<span class="st"><i style="width:'+Math.round(p.stamina)+'%"></i></span></div>'}
  if(act.innerHTML!==html)act.innerHTML=html;
- for(const [id,el] of [['p1',$('#tag1')],['p2',$('#tag2')]]){const h=G.humans.find(h=>h.id===id),p=h&&h.player;
+ $('#tag1').hidden=true;$('#tag2').hidden=true;
+ if(false)for(const [id,el] of [['p1',$('#tag1')],['p2',$('#tag2')]]){const h=G.humans.find(h=>h.id===id),p=h&&h.player;
   if(!p||p.sentOff||G.phase==='replay'||G.intro||G.phase==='break'){el.hidden=true;continue}
   const q=ipos(p,ALPHA);_v3.set(q.x,2.55,q.z).project(camera);if(_v3.z>1){el.hidden=true;continue}
   const tx=(h.locked?'JIJ · ':'')+p.d.num+' '+p.d.short;if(el.textContent!==tx)el.textContent=tx;el.className='ntag '+id;
